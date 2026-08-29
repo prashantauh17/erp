@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Employee Management Portal - V8 Login</title>
+<title>Employee Management Portal - V9 Manager/Admin</title>
 <style>
 :root{
   --blue:#243f7a;--blue2:#4263a8;--orange:#e59b56;--bg:#f5f7fb;--text:#1f2937;
@@ -495,23 +495,46 @@ function setRoleUI(){
 }
 function applyRolePermissions(){
   const role=currentPortalRole;
-  // Employee = read-only. Manager = operational edit. Admin = everything.
-  if(role==='employee'){
+
+  // Manager: full access everywhere, including approval.
+  // Admin: full access except Manager Approval page and approval actions.
+  if(role==='admin'){
     setTimeout(()=>{
-      document.querySelectorAll('button').forEach(b=>{
-        if(['logoutBtn','loginBtn'].includes(b.id)) return;
-        const t=(b.textContent||'').toLowerCase();
-        if(/add|save|delete|remove|create|edit|approve|reject|joined|mobil|book|submit|update/.test(t)){
-          b.disabled=true;b.title='Read-only Employee access';b.style.opacity='.45';b.style.cursor='not-allowed';
+      // Hide Manager Approval navigation button.
+      document.querySelectorAll('button,[data-view],a').forEach(el=>{
+        const t=(el.textContent||'').trim().toLowerCase();
+        const v=(el.getAttribute('data-view')||'').toLowerCase();
+        if(t==='manager approval' || v==='approval' || v==='manager-approval' || v==='managerapproval'){
+          el.style.display='none';
         }
       });
-      document.querySelectorAll('input,select,textarea').forEach(x=>{
-        if(['loginUsername','loginPassword'].includes(x.id))return;
-        x.disabled=true;
+
+      // Disable/hide approval-specific action buttons wherever they appear.
+      document.querySelectorAll('button').forEach(btn=>{
+        const t=(btn.textContent||'').trim().toLowerCase();
+        if(t.includes('approve') || t.includes('reject') || t.includes('manager approval')){
+          btn.disabled=true;
+          btn.style.display='none';
+          btn.title='Approval access is available to Manager role only';
+        }
       });
+
+      // If admin somehow lands on approval view, send them to dashboard.
+      const activeApproval=[...document.querySelectorAll('[data-view].active')].find(x=>{
+        const v=(x.getAttribute('data-view')||'').toLowerCase();
+        return v.includes('approval');
+      });
+      if(activeApproval){
+        const dash=[...document.querySelectorAll('[data-view]')].find(x=>(x.getAttribute('data-view')||'').toLowerCase()==='dashboard');
+        if(dash) dash.click();
+      }
     },250);
   }
-  document.querySelectorAll('[data-admin-only="1"]').forEach(el=>el.style.display=(role==='admin'?'':'none'));
+
+  // User management is available to both Manager and Admin.
+  document.querySelectorAll('[data-user-management="1"]').forEach(el=>{
+    el.style.display=(role==='manager'||role==='admin')?'':'none';
+  });
 }
 async function portalLogin(){
   const u=document.getElementById('loginUsername').value.trim();
@@ -984,14 +1007,21 @@ attendanceMonth.value=monthNow();payrollMonth.value=monthNow();
 refreshAll();
 initPortalAuth();
 
+setTimeout(()=>{
+  if(location.hash==='#users' && ['manager','admin'].includes(currentPortalRole) && typeof openUserManagement==='function'){
+    openUserManagement();
+  }
+},700);
+
+
 async function openUserManagement(){
-  if(currentPortalRole!=='admin') return;
+  if(!['manager','admin'].includes(currentPortalRole)) return;
   document.getElementById('userManagementPanel').style.display='block';
   await loadPortalUsers();
 }
 function closeUserManagement(){document.getElementById('userManagementPanel').style.display='none'}
 async function createPortalUser(){
-  if(currentPortalRole!=='admin') return alert('Admin access required');
+  if(!['manager','admin'].includes(currentPortalRole)) return alert('Manager or Admin access required');
   const username=document.getElementById('umUsername').value.trim().toLowerCase();
   const password=document.getElementById('umPassword').value;
   const role=document.getElementById('umRole').value;
@@ -1015,7 +1045,7 @@ async function createPortalUser(){
   }catch(e){msg.textContent=e.message||'Failed';msg.style.color='#c92a2a'}
 }
 async function loadPortalUsers(){
-  if(currentPortalRole!=='admin') return;
+  if(!['manager','admin'].includes(currentPortalRole)) return;
   const rows=await apiAuthed('user_profiles?select=id,username,role,employee_code,is_active,email&order=created_at.asc');
   const body=document.getElementById('umUsersBody');
   body.innerHTML=(rows||[]).map(u=>`<tr style="border-top:1px solid #e5e9ed">
@@ -1027,7 +1057,7 @@ async function loadPortalUsers(){
   </tr>`).join('');
 }
 async function togglePortalUser(id,newState){
-  if(currentPortalRole!=='admin') return;
+  if(!['manager','admin'].includes(currentPortalRole)) return;
   await apiAuthed('user_profiles?id=eq.'+encodeURIComponent(id),{
     method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({is_active:newState})
   });
@@ -1036,10 +1066,10 @@ async function togglePortalUser(id,newState){
 
 </script>
 
-<div id="userManagementPanel" data-admin-only="1" style="display:none;position:fixed;inset:0;z-index:99995;background:#0008;padding:30px;overflow:auto">
+<div id="userManagementPanel" data-user-management="1" style="display:none;position:fixed;inset:0;z-index:99995;background:#0008;padding:30px;overflow:auto">
   <div style="max-width:950px;margin:auto;background:#f6f8fa;border-radius:15px;padding:20px">
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <div><h2 style="margin:0">User Management</h2><div style="font-size:13px;color:#687684">Create Manager and Employee portal users</div></div>
+      <div><h2 style="margin:0">User Management</h2><div style="font-size:13px;color:#687684">Create Manager and Admin portal users</div></div>
       <button class="um-btn secondary" onclick="closeUserManagement()">Close</button>
     </div>
     <div class="user-mgmt-card">
@@ -1047,8 +1077,8 @@ async function togglePortalUser(id,newState){
       <div class="user-mgmt-grid">
         <div><label>Username</label><input id="umUsername" placeholder="e.g. manager1 / emp001"></div>
         <div><label>Password</label><input id="umPassword" type="password" placeholder="Minimum 8 characters"></div>
-        <div><label>Role</label><select id="umRole"><option value="manager">Manager</option><option value="employee">Employee</option></select></div>
-        <div><label>Employee Code (optional for Manager)</label><input id="umEmployeeCode" placeholder="e.g. PSN-001"></div>
+        <div><label>Role</label><select id="umRole"><option value="manager">Manager</option><option value="admin">Admin</option></select></div>
+        <div><label>Employee Code / Reference (optional)</label><input id="umEmployeeCode" placeholder="e.g. PSN-001"></div>
       </div>
       <button class="um-btn" style="margin-top:14px" onclick="createPortalUser()">Create User</button>
       <span id="umMessage" style="margin-left:10px;font-size:13px"></span>
@@ -1067,7 +1097,7 @@ async function togglePortalUser(id,newState){
     </div>
   </div>
 </div>
-<button id="userMgmtFloatingBtn" data-admin-only="1" onclick="openUserManagement()" style="display:none;position:fixed;left:15px;bottom:15px;z-index:99989;border:0;border-radius:999px;padding:10px 14px;background:#17324d;color:#fff;font-weight:800;box-shadow:0 4px 15px #0003;cursor:pointer">👤 User Management</button>
+<button id="userMgmtFloatingBtn" data-user-management="1" onclick="openUserManagement()" style="display:none;position:fixed;left:15px;bottom:15px;z-index:99989;border:0;border-radius:999px;padding:10px 14px;background:#17324d;color:#fff;font-weight:800;box-shadow:0 4px 15px #0003;cursor:pointer">➕ Create User / User Management</button>
 
 </body>
 </html>
