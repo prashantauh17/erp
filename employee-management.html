@@ -410,7 +410,48 @@ th{background:#f7f9fc;color:#46536a;position:sticky;top:0}
 <script>
 const SUPABASE_URL="https://rgvowwmxzaiodpbuauje.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_9YzzBg460Re5I_6UJl4sLQ_QoO3xO-X";
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+
+const SB_URL="https://rgvowwmxzaiodpbuauje.supabase.co";
+const SB_KEY="sb_publishable_9YzzBg460Re5I_6UJl4sLQ_QoO3xO-X";
+function cloudStatus(text,ok){
+  let el=document.getElementById('cloudStatus');
+  if(!el){
+    el=document.createElement('div');
+    el.id='cloudStatus';
+    el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:99999;padding:9px 13px;border-radius:999px;font:700 12px Arial;background:#fff;border:1px solid #ddd;box-shadow:0 4px 15px #0002';
+    document.body.appendChild(el);
+  }
+  el.textContent=text;
+  el.style.color=ok===true?'#087f5b':ok===false?'#c92a2a':'#555';
+  el.style.borderColor=ok===true?'#63e6be':ok===false?'#ffa8a8':'#ddd';
+}
+async function sbRest(path,opts={}){
+  const headers=Object.assign({
+    'apikey':SB_KEY,
+    'Authorization':'Bearer '+SB_KEY,
+    'Content-Type':'application/json'
+  },opts.headers||{});
+  const r=await fetch(SB_URL+'/rest/v1/'+path,Object.assign({},opts,{headers}));
+  if(!r.ok){
+    const t=await r.text();
+    throw new Error('Supabase '+r.status+': '+t);
+  }
+  const t=await r.text();
+  return t?JSON.parse(t):null;
+}
+async function cloudPut(stateKey,data){
+  cloudStatus('SUPABASE: SAVING…',null);
+  await sbRest('portal_state?on_conflict=state_key',{
+    method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify({state_key:stateKey,data:data,updated_at:new Date().toISOString()})
+  });
+  cloudStatus('SUPABASE CONNECTED ✓',true);
+}
+async function cloudGet(keys){
+  const q=keys.map(k=>'"'+k+'"').join(',');
+  return await sbRest('portal_state?select=state_key,data,updated_at&state_key=in.('+encodeURIComponent(q)+')');
+}
 // ===============================
 // SUPABASE-READY DATA LAYER
 // ===============================
@@ -456,32 +497,41 @@ function saveDB(){
 
 async function cloudSaveEmployeeState(){
   try{
-    const {error}=await sb.from('portal_state').upsert({
-      state_key:'employee_management',
-      data:db,
-      updated_at:new Date().toISOString()
-    },{onConflict:'state_key'});
-    if(error) console.error('Supabase save error:',error);
-  }catch(err){ console.error('Supabase save failed:',err); }
+    await cloudPut('employee_management',db);
+  }catch(err){
+    console.error('Supabase save failed:',err);
+    cloudStatus('SUPABASE ERROR ✕',false);
+  }
 }
 async function cloudLoadEmployeeState(){
+  cloudStatus('SUPABASE: CONNECTING…',null);
   try{
-    const {data,error}=await sb.from('portal_state')
-      .select('data').eq('state_key','employee_management').maybeSingle();
-    if(error) throw error;
-    if(data && data.data){
-      const x=data.data;
-      db=Object.assign(clone(defaultData),x,{
-        masters:Object.assign(clone(defaultData.masters),x.masters||{})
+    const rows=await cloudGet(['employee_management']);
+    const row=(rows||[]).find(r=>r.state_key==='employee_management');
+    const cloud=row?row.data:null;
+    const local=JSON.parse(localStorage.getItem(DBKEY)||'null');
+    const cloudHasData=cloud && typeof cloud==='object' && Object.keys(cloud).length;
+
+    if(cloudHasData){
+      db=Object.assign(clone(defaultData),cloud,{
+        masters:Object.assign(clone(defaultData.masters),cloud.masters||{})
       });
-      db.masters.customMasters=Object.assign({},defaultData.masters.customMasters,(x.masters&&x.masters.customMasters)||{});
+      db.masters.customMasters=Object.assign({},defaultData.masters.customMasters,(cloud.masters&&cloud.masters.customMasters)||{});
       localStorage.setItem(DBKEY,JSON.stringify(db));
-      refreshAll();
+    }else if(local){
+      db=Object.assign(clone(defaultData),local,{
+        masters:Object.assign(clone(defaultData.masters),local.masters||{})
+      });
+      await cloudPut('employee_management',db);
     }else{
-      await cloudSaveEmployeeState();
+      await cloudPut('employee_management',db);
     }
+    refreshAll();
+    cloudStatus('SUPABASE CONNECTED ✓',true);
   }catch(err){
-    console.error('Supabase load failed; using browser cache:',err);
+    console.error('Supabase load failed:',err);
+    cloudStatus('SUPABASE ERROR ✕',false);
+    alert('Supabase connection failed. Please run SUPABASE_FIX.sql once, then refresh this page.');
   }
 }
 
