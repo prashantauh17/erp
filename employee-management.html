@@ -73,6 +73,10 @@ th{background:#f7f9fc;color:#46536a;position:sticky;top:0}
 .notice{padding:10px 12px;border-radius:9px;background:#eef3ff;color:#334e85;font-size:12px;border:1px solid #dce5f3}
 .empty{padding:24px;text-align:center;color:#8a94a6}
 .small{font-size:11px;color:var(--muted)}
+.master-box{border:1px solid #e3e8f0;border-radius:12px;padding:14px;background:#fbfcff;margin-bottom:12px}
+.master-box h3{margin:0 0 10px;color:var(--blue);font-size:15px}
+.master-item{display:inline-flex;align-items:center;gap:6px;background:#e7eefc;color:#264a92;border-radius:18px;padding:5px 9px;margin:4px;font-size:11px;font-weight:700}
+.master-item button{border:0;background:transparent;color:#9b2f2f;font-weight:900;cursor:pointer;padding:0}
 @media(max-width:950px){
  .layout{grid-template-columns:1fr}
  .sidebar{position:static;height:auto;display:flex;overflow:auto;padding:8px}
@@ -209,23 +213,46 @@ th{background:#f7f9fc;color:#46536a;position:sticky;top:0}
 </section>
 
 <section id="masters" class="view">
- <div class="hero"><div><h1>Masters / Settings</h1><p>Maintain project, department and designation values used by the portal.</p></div></div>
+ <div class="hero">
+   <div>
+     <h1>Masters / Settings</h1>
+     <p>Create and maintain master data used across the portal.</p>
+   </div>
+   <button class="btn primary" onclick="openNewMasterModal()">+ Create New Master</button>
+ </div>
+
  <div class="grid-2">
   <div class="panel">
     <h2>Projects</h2>
-    <div class="actions" style="margin:12px 0"><input id="newProject" placeholder="Project / Site name"><button class="btn primary" onclick="addMaster('projects','newProject')">Add</button></div>
+    <div class="actions" style="margin:12px 0">
+      <input id="newProject" placeholder="Project / Site name">
+      <button class="btn primary" onclick="addMaster('projects','newProject')">Add</button>
+    </div>
     <div id="projectMasterList"></div>
   </div>
+
   <div class="panel">
     <h2>Departments</h2>
-    <div class="actions" style="margin:12px 0"><input id="newDepartment" placeholder="Department"><button class="btn primary" onclick="addMaster('departments','newDepartment')">Add</button></div>
+    <div class="actions" style="margin:12px 0">
+      <input id="newDepartment" placeholder="Department">
+      <button class="btn primary" onclick="addMaster('departments','newDepartment')">Add</button>
+    </div>
     <div id="departmentMasterList"></div>
   </div>
  </div>
+
+ <div class="panel">
+   <div class="panel-head">
+     <h2>Custom Masters</h2>
+     <button class="btn primary" onclick="openNewMasterModal()">+ Create New Master</button>
+   </div>
+   <div id="customMasterArea"></div>
+ </div>
+
  <div class="panel">
    <div class="panel-head"><h2>Future Supabase Connection</h2></div>
    <div class="notice">
-     This HTML currently stores data in your browser using localStorage. Later, the same modules can be connected to Supabase tables without changing the portal layout.
+     This HTML currently stores data in your browser using localStorage. Later, Projects, Departments and all Custom Masters can be moved to Supabase tables without changing the portal layout.
    </div>
  </div>
 </section>
@@ -354,6 +381,31 @@ th{background:#f7f9fc;color:#46536a;position:sticky;top:0}
  </div><div class="actions" style="margin-top:18px"><button class="btn primary" onclick="saveDemob()">Save Release Record</button></div></div>
 </div></div>
 
+
+<!-- New Master Modal -->
+<div class="modal" id="newMasterModal"><div class="modal-card">
+ <div class="modal-head"><b>Create New Master</b><button class="close" onclick="closeModal('newMasterModal')">×</button></div>
+ <div class="modal-body">
+   <div class="grid-2">
+     <div>
+       <label>Master Name *</label>
+       <input id="nm_name" placeholder="e.g. Designations, Nationalities, Clients, Locations">
+     </div>
+     <div>
+       <label>First Value</label>
+       <input id="nm_value" placeholder="Optional first item">
+     </div>
+   </div>
+   <div class="small" style="margin-top:10px">
+     Examples: Designations, Nationalities, Clients, Camp Locations, Visa Types, Document Types, Training Types.
+   </div>
+   <div class="actions" style="margin-top:18px">
+     <button class="btn primary" onclick="createNewMaster()">Create Master</button>
+     <button class="btn secondary" onclick="closeModal('newMasterModal')">Cancel</button>
+   </div>
+ </div>
+</div></div>
+
 <script>
 // ===============================
 // SUPABASE-READY DATA LAYER
@@ -376,7 +428,8 @@ const defaultData={
   demob:[],
   masters:{
     projects:['Head Office','ADNOC Ruwais','Habshan','ASAB','Mussafah','Zirku Island'],
-    departments:['Management','HR & Admin','Finance','Contracts','HSE','QA/QC','Mechanical','Scaffolding','E&I','Planning']
+    departments:['Management','HR & Admin','Finance','Contracts','HSE','QA/QC','Mechanical','Scaffolding','E&I','Planning'],
+    customMasters:{}
   }
 };
 
@@ -385,7 +438,9 @@ function loadDB(){
   try{
     const x=JSON.parse(localStorage.getItem(DBKEY)||'null');
     if(!x) return clone(defaultData);
-    return Object.assign(clone(defaultData),x,{masters:Object.assign(clone(defaultData.masters),x.masters||{})});
+    const merged=Object.assign(clone(defaultData),x,{masters:Object.assign(clone(defaultData.masters),x.masters||{})});
+    merged.masters.customMasters=Object.assign({},defaultData.masters.customMasters,(x.masters&&x.masters.customMasters)||{});
+    return merged;
   }catch(e){return clone(defaultData)}
 }
 let db=loadDB();
@@ -627,6 +682,47 @@ function addMaster(type,inputId){
 function removeMaster(type,v){
  db.masters[type]=db.masters[type].filter(x=>x!==v);saveDB();
 }
+
+function slugMasterName(name){
+ return String(name||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+}
+function openNewMasterModal(){
+ nm_name.value=''; nm_value.value=''; openModal('newMasterModal');
+}
+function createNewMaster(){
+ const name=nm_name.value.trim();
+ if(!name){alert('Master Name is required.');return}
+ const key=slugMasterName(name);
+ if(!key){alert('Please enter a valid Master Name.');return}
+ if(db.masters.customMasters[key]){alert('This master already exists.');return}
+ db.masters.customMasters[key]={name:name,values:[]};
+ const first=nm_value.value.trim();
+ if(first) db.masters.customMasters[key].values.push(first);
+ closeModal('newMasterModal'); saveDB();
+}
+function addCustomMasterValue(key){
+ const input=document.getElementById('cm_input_'+key);
+ if(!input)return;
+ const v=input.value.trim();
+ if(!v)return;
+ const m=db.masters.customMasters[key];
+ if(!m.values.includes(v))m.values.push(v);
+ input.value='';saveDB();
+}
+function removeCustomMasterValue(key,value){
+ const m=db.masters.customMasters[key];
+ if(!m)return;
+ m.values=m.values.filter(x=>x!==value);
+ saveDB();
+}
+function deleteCustomMaster(key){
+ const m=db.masters.customMasters[key];
+ if(!m)return;
+ if(!confirm('Delete master "'+m.name+'" and all its values?'))return;
+ delete db.masters.customMasters[key];
+ saveDB();
+}
+
 function renderMasters(){
  projectMasterList.innerHTML=db.masters.projects.map(v=>'<span class="badge blue" style="margin:4px">'+esc(v)+' <span style="cursor:pointer;margin-left:5px" onclick="removeMaster(\'projects\',\''+esc(v).replace(/'/g,"\\'")+'\')">×</span></span>').join('');
  departmentMasterList.innerHTML=db.masters.departments.map(v=>'<span class="badge blue" style="margin:4px">'+esc(v)+' <span style="cursor:pointer;margin-left:5px" onclick="removeMaster(\'departments\',\''+esc(v).replace(/'/g,"\\'")+'\')">×</span></span>').join('');
