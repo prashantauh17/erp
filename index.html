@@ -130,6 +130,8 @@ th{background:#f7f9fc;color:#46536a}
 .card-icon{width:38px;height:38px;border-radius:12px;background:#eef3ff;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px}
 .card-sub{font-size:10px;color:#8a94a6;margin-top:6px}
 
+
+.btn.danger{background:#d83434!important;color:#fff!important;border-color:#d83434!important}
 </style>
 
 <style id="psnAuthCss">
@@ -855,6 +857,36 @@ function portalBack(){
   }
 }
 
+
+function removeCandidate(id){
+  const c=candidates.find(x=>x.id===id);
+  if(!c) return;
+
+  const candidateName=c.name || c.full_name || 'this candidate';
+  if(!confirm('Remove '+candidateName+' from Selected Candidates?\n\nThis action will remove the candidate from the portal.')) return;
+
+  candidates=candidates.filter(x=>x.id!==id);
+
+  try{
+    const editId=document.getElementById('editId');
+    if(editId && editId.value===id){
+      if(typeof clearCandidateForm==='function') clearCandidateForm();
+      else editId.value='';
+    }
+  }catch(e){}
+
+  if(typeof saveAll==='function'){
+    saveAll();
+  }else{
+    try{
+      localStorage.setItem(KEY,JSON.stringify(candidates));
+    }catch(e){}
+    if(typeof renderAll==='function') renderAll();
+  }
+
+  alert('Candidate removed successfully.');
+}
+
 function uid(){return 'C'+Date.now().toString().slice(-8);}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -1389,7 +1421,7 @@ function actionButtons(c){
  if(['Visa Processing','Visa Issued','Visa Rejected','UAE Visa In Process','UAE Visa Completed','UAE Visa Rejected','Arrived UAE'].includes(c.status)) a+=` <button class="btn secondary" onclick="openVisaModal('${c.id}')">Visa / Mobilization</button>`;
  if(c.status==='Visa Issued') a+=` <button class="btn orange" onclick="markArrived('${c.id}')">Mark Arrived</button>`;
  if(c.status==='Arrived UAE') a+=` <button class="btn green" onclick="markJoined('${c.id}')">Confirm Joining</button>`;
- if(['Offer Approved','Offer Issued','Offer Accepted','Visa Processing','Visa Issued','Arrived UAE','Joined'].includes(c.status)) a+=` <button class="btn secondary" onclick="openOffer('${c.id}')">View Offer</button>`;
+ if(['Offer Approved','Offer Issued','Offer Accepted','Visa Processing','Visa Issued','Arrived UAE','Joined'].includes(c.status)) a+=` <button class="btn secondary" onclick="openOffer('${c.id}')">View Offer</button> <button class="btn danger" onclick="removeCandidate('${c.id}')">Remove</button>`;
  return a;
 }
 function tableRows(list){
