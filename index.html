@@ -464,7 +464,11 @@ th{background:#f7f9fc;color:#46536a}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL="https://rgvowwmxzaiodpbuauje.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_9YzzBg460Re5I_6UJl4sLQ_QoO3xO-X";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 const KEY='candidate_onboarding_v1';
 let candidates=JSON.parse(localStorage.getItem(KEY)||'[]');
 const MASTER_KEY='candidate_onboarding_masters_v1';
@@ -475,6 +479,7 @@ let masters=JSON.parse(localStorage.getItem(MASTER_KEY)||'null') || {
 function saveMasters(){
   localStorage.setItem(MASTER_KEY,JSON.stringify(masters));
   renderMasters();
+  cloudSaveState('candidate_masters',masters);
 }
 function addMaster(type){
   const input=document.getElementById(type==='designation'?'newDesignation':'newNationality');
@@ -507,7 +512,87 @@ let editId=null;
 let activeVisaCandidateId=null;
 const stages=['Selected','Offer Draft','Pending Approval','Offer Approved','Offer Issued','Offer Accepted','Visa Processing','Visa Issued','Arrived UAE','Joined'];
 
-function saveAll(){localStorage.setItem(KEY,JSON.stringify(candidates)); renderAll();}
+function saveAll(){
+  localStorage.setItem(KEY,JSON.stringify(candidates));
+  renderAll();
+  cloudSaveState('candidate_onboarding',candidates);
+}
+
+async function cloudSaveState(stateKey,data){
+  try{
+    const {error}=await sb.from('portal_state').upsert({
+      state_key:stateKey,
+      data:data,
+      updated_at:new Date().toISOString()
+    },{onConflict:'state_key'});
+    if(error) console.error('Supabase save error:',error);
+  }catch(err){ console.error('Supabase save failed:',err); }
+}
+async function cloudLoadOnboarding(){
+  try{
+    const {data,error}=await sb.from('portal_state')
+      .select('state_key,data')
+      .in('state_key',['candidate_onboarding','candidate_masters']);
+    if(error) throw error;
+    (data||[]).forEach(row=>{
+      if(row.state_key==='candidate_onboarding' && Array.isArray(row.data)){
+        candidates=row.data;
+        localStorage.setItem(KEY,JSON.stringify(candidates));
+      }
+      if(row.state_key==='candidate_masters' && row.data){
+        masters=row.data;
+        localStorage.setItem(MASTER_KEY,JSON.stringify(masters));
+      }
+    });
+    renderAll();
+    renderMasters();
+  }catch(err){
+    console.error('Supabase load failed; using browser cache:',err);
+  }
+}
+async function pushJoinedCandidateToEmployeePortal(c){
+  try{
+    const {data:row,error}=await sb.from('portal_state')
+      .select('data').eq('state_key','employee_management').maybeSingle();
+    if(error) throw error;
+    const state=(row && row.data) ? row.data : {
+      employees:[],allocations:[],documents:[],attendance:[],leave:[],
+      training:[],payroll:[],demob:[],
+      masters:{projects:['Head Office'],departments:[],customMasters:{}}
+    };
+    state.employees=Array.isArray(state.employees)?state.employees:[];
+    const code=(c.employeeCode||'').trim();
+    if(!code) return;
+    const existing=state.employees.find(e=>String(e.code||'').toLowerCase()===code.toLowerCase());
+    const record={
+      id:existing?.id || (crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()),
+      code:code,
+      name:c.name||'',
+      nationality:c.nationality||'',
+      passport:c.passport||'',
+      designation:c.designation||'',
+      department:existing?.department||'',
+      mobile:c.mobile||'',
+      email:c.email||'',
+      joiningDate:c.joiningDate||'',
+      status:'Active',
+      project:c.project||'',
+      type:existing?.type||'Worker',
+      basic:Number(c.basic||0),
+      allowance:Number(c.allowance||0),
+      remarks:existing?.remarks||'Created from Candidate Onboarding',
+      createdAt:existing?.createdAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      candidateCode:c.id||''
+    };
+    if(existing) Object.assign(existing,record); else state.employees.push(record);
+    if(state.masters && Array.isArray(state.masters.projects) && c.project && !state.masters.projects.includes(c.project)){
+      state.masters.projects.push(c.project);
+    }
+    await cloudSaveState('employee_management',state);
+  }catch(err){ console.error('Employee portal sync failed:',err); }
+}
+
 function uid(){return 'C'+Date.now().toString().slice(-8);}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -1015,11 +1100,16 @@ function showArrivalsWithin2Days(){
 
 function updateVisa(id){ openVisaModal(id); }
 function markArrived(id){ openVisaModal(id); }
-function markJoined(id){
+async function markJoined(id){
  const c=candidates.find(x=>x.id===id); if(!c)return;
  c.joiningDate=prompt('Actual Joining Date (YYYY-MM-DD)',today())||today();
  c.employeeCode=prompt('Employee Code','')||'';
- c.employeeStatus='ACTIVE'; setStatus(c,'Joined'); saveAll();
+ if(!c.employeeCode){alert('Employee Code is required to transfer the candidate to Employee Management.');return;}
+ c.employeeStatus='ACTIVE';
+ setStatus(c,'Joined');
+ saveAll();
+ await pushJoinedCandidateToEmployeePortal(c);
+ alert('Candidate joined and transferred to Employee Management.');
 }
 function badge(status){
  let cls=''; if(['Offer Accepted','Visa Issued','Joined','Offer Approved'].includes(status))cls='green';
@@ -1568,6 +1658,7 @@ function closeOffer(){
   document.getElementById('offerModal').classList.add('hidden');
 }
 renderAll(); renderMasters(); calcTotal();
+cloudLoadOnboarding();
 </script>
 </body>
 </html>
