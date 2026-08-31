@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Employee Management Portal - V14 Navigation</title>
+<title>Employee Management Portal - V10 User Fix</title>
 <style>
 :root{
   --blue:#243f7a;--blue2:#4263a8;--orange:#e59b56;--bg:#f5f7fb;--text:#1f2937;
@@ -137,8 +137,6 @@ th{background:#f7f9fc;color:#46536a;position:sticky;top:0}
 <aside class="sidebar">
   <div class="side-label">Portal Navigation</div>
   <button onclick="window.location.href='index.html'" style="background:#e59b56;color:#fff;font-weight:800">← Candidate Onboarding</button>
-  <button id="globalBackBtnEmp" onclick="portalBack()" style="background:#53697d;color:#fff;font-weight:800;margin-bottom:8px">← Back</button>
-  <button id="mainCreateUserBtnEmp" data-user-management="1" onclick="openUserManagement()" style="display:none;background:#14906f;color:#fff;font-weight:800;margin-bottom:8px">＋ Create New User</button>
   <div class="side-label">Overview</div>
   <button class="active" data-view="dashboard">Dashboard</button>
   <button data-view="employees">Employee Master</button>
@@ -684,14 +682,6 @@ async function cloudLoadEmployeeState(){
     cloudStatus('SUPABASE ERROR ✕',false);
     alert('Supabase connection failed. Please run SUPABASE_FIX.sql once, then refresh this page.');
   }
-}
-
-
-function portalBack(){
-  const um=document.getElementById('userManagementPanel');
-  if(um && um.style.display==='block'){ closeUserManagement(); return; }
-  if(history.length>1){ history.back(); }
-  else{ window.location.href='index.html'; }
 }
 
 function uid(){return (crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(16).slice(2));}
