@@ -187,6 +187,18 @@ th{background:#f7f9fc;color:#46536a}
 }
 </style>
 
+
+<style id="properExportV43">
+@media print{
+  #sendBackModal,#signatureSettingsModal,body>.modal:not(#offerModal),
+  .no-print,.word-ribbon,.word-status,#offerEditorToolbar,
+  .signature-toolbar-v37,.manager-offer-toolbar-v39{
+    display:none!important;
+    visibility:hidden!important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -507,8 +519,8 @@ th{background:#f7f9fc;color:#46536a}
         <button id="saveOfferBtn" class="btn green" onclick="saveOfferChanges()">💾 Save Changes</button>
         <button class="btn orange" onclick="toggleManualOfferEditor()">+ Add Manual Text</button>
         <button class="btn secondary" onclick="resetSavedOffer()">Reset Original</button>
-        <button class="btn green" onclick="downloadOfferPDF()">Download PDF</button>
-        <button class="btn primary" onclick="downloadOfferWord()">Download Word</button>
+        <button class="btn green" onclick="downloadOfferPDF()">Save PDF</button>
+        <button class="btn primary" onclick="downloadOfferWord()">Save Word</button>
         <button class="btn secondary" onclick="closeOffer()">Close</button>
       </div>
     </div>
@@ -1710,7 +1722,8 @@ function progressHtml(c){
 let currentOfferCandidateId=null;
 function openOffer(id){
  currentOfferCandidateId=id;
- const c=candidates.find(x=>x.id===id); if(!c)return;
+ const c=candidates.find(x=>x.id===id);
+ currentOfferCandidate=c; if(!c)return;
  const approved=['Offer Approved','Offer Issued','Offer Accepted','Visa Processing','Visa Issued','Arrived UAE','Joined'].includes(c.status);
  const issueNo=c.offerNo?`<b>Offer No:</b> ${esc(c.offerNo)}`:'';
  const stamp=approved?`<div class="manager-approval">
@@ -2136,170 +2149,163 @@ function cleanOfferClone(){
   return clone;
 }
 
-function downloadOfferPDF(){
-  const source=document.getElementById('offerPrint');
-  if(!source || !source.innerHTML.trim()){
-    alert('Please generate/open the offer letter first.');
-    return;
-  }
 
-  const clone=cleanOfferClone();
-  const printWin=window.open('','_blank','width=1000,height=800');
-  if(!printWin){
-    alert('Please allow pop-ups to download/print the PDF.');
-    return;
-  }
+function buildExactOfferExportClone(){
+  const src=document.getElementById('offerPrint');
+  if(!src)return null;
 
-  const pdfStyles=`
-  <style>
-    @page{size:A4;margin:0}
-    *{box-sizing:border-box}
-    html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif;color:#1f2937}
-    .offer-page{
-      width:210mm;min-height:297mm;
-      margin:0;padding:7mm 14mm 7mm;position:relative;
-      page-break-after:always;break-after:page;
-      font-size:12.5px;line-height:1.27;background:#fff
-    }
-    .offer-page:last-child{page-break-after:auto;break-after:auto}
-    .offer-head img{width:100%;height:auto;max-height:66px;object-fit:contain}
-    .offer-title{text-align:center;font-weight:700;text-decoration:underline;margin:6px 0 7px;font-size:14px}
-    .row{display:flex;justify-content:space-between;gap:20px}
-    .offer-page h3{font-size:13.5px;color:#324d7f;margin:4px 0 1px}
-    .offer-page p{font-size:12.5px;line-height:1.27;margin:1.5px 0}
-    .offer-page ul{margin:1px 0 4px 16px;padding:0}
-    .offer-page li{font-size:12.5px;line-height:1.27;margin:0}
-    .watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden}
-    .watermark span{font-size:82px;color:rgba(100,100,100,.10);transform:rotate(-45deg);font-weight:700}
-    .sign-block{margin-top:4px;margin-bottom:2px;page-break-inside:avoid;break-inside:avoid}
-    .manager-approval{display:block;margin-top:5px;width:300px;page-break-inside:avoid}
-    .manager-approval .stamp{display:block;width:165px;max-height:76px;object-fit:contain;object-position:left bottom;margin:0 0 2px}
-    .manager-name{font-size:14px;font-weight:800;line-height:1.15;margin:0}
-    .manager-title{font-size:12.5px;font-weight:700;line-height:1.15;margin:0}
-    .footer-note{position:static;margin:4px 0 0;text-align:center;page-break-inside:avoid;break-inside:avoid;clear:both}
-    .footer-image{page-break-inside:avoid;break-inside:avoid}
-    .footer-image img{width:100%;height:auto;display:block}
-    .manual-offer-block{border-left:3px solid #e59b56;padding-left:9px;margin:6px 0}
-    .progress,.manual-remove,.no-print{display:none!important}
-  
-.dashboard-hero{background:linear-gradient(135deg,#eef3ff 0%,#fff8ef 100%);border:1px solid #dce5f3;border-radius:18px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
-.dashboard-hero h1{margin:0;color:var(--blue);font-size:24px}
-.dashboard-hero p{margin:5px 0 0;color:#667085;font-size:13px}
-.dashboard-chip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #dfe5ef;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:700;color:#4d5b73}
-.dashboard-section-title{font-size:13px;font-weight:800;color:#44516a;margin:6px 0 10px;text-transform:uppercase;letter-spacing:.6px}
-.card-icon{width:38px;height:38px;border-radius:12px;background:#eef3ff;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px}
-.card-sub{font-size:10px;color:#8a94a6;margin-top:6px}
+  const clone=src.cloneNode(true);
 
-</style>`;
+  clone.querySelectorAll(
+    'button,input,select,textarea,.no-print,.word-ribbon,.word-status,'+
+    '#offerEditorToolbar,.signature-toolbar-v37,.manager-offer-toolbar-v39,'+
+    '#sendBackModal,#signatureSettingsModal,.modal,.modal-head,'+
+    '[data-user-management]'
+  ).forEach(el=>el.remove());
 
-  printWin.document.open();
-  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offer Letter</title>${pdfStyles}</head><body>${clone.innerHTML}
-<button id="createUserQuickBtn" data-user-management="1"
- onclick="window.location.href='employee-management.html#users'"
- style="display:none;position:fixed;left:14px;bottom:15px;z-index:99989;border:0;border-radius:999px;padding:10px 14px;background:#17324d;color:#fff;font-weight:800;box-shadow:0 4px 15px #0003;cursor:pointer">
- ➕ Create User
-</button>
+  clone.querySelectorAll('[contenteditable]').forEach(el=>el.removeAttribute('contenteditable'));
+  clone.querySelectorAll('.word-doc-edit,.advanced-edit-active').forEach(el=>{
+    el.classList.remove('word-doc-edit','advanced-edit-active');
+  });
 
-</body></html>`);
-  printWin.document.close();
-
-  setTimeout(()=>{
-    printWin.focus();
-    printWin.print();
-  },500);
+  return clone;
 }
 
-function downloadOfferWord(){
-  const source=document.getElementById('offerPrint');
-  if(!source || !source.innerHTML.trim()){
-    alert('Please generate/open the offer letter first.');
-    return;
-  }
+function currentOfferFileName(ext){
+  const c=(typeof currentOfferCandidate!=='undefined' && currentOfferCandidate)
+    ? currentOfferCandidate : null;
+  const name=(c?.name||'Candidate').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'');
+  const no=(c?.offerNo||c?.id||'Offer').toString().replace(/[^a-z0-9]+/gi,'_');
+  return `PSN_Offer_${name}_${no}.${ext}`;
+}
 
-  const clone=cleanOfferClone();
-
-  // Convert embedded data-URI images to CID references for reliable Microsoft Word display.
-  const images=[];
-  clone.querySelectorAll('img').forEach((img,index)=>{
-    const src=img.getAttribute('src')||'';
-    const m=src.match(/^data:([^;]+);base64,(.+)$/);
-    if(m){
-      const cid='image'+index;
-      images.push({cid,mime:m[1],data:m[2]});
-      img.setAttribute('src','cid:'+cid);
-    }
-  });
-
-  const wordStyles=`
-  <style>
-    @page Section1{size:595.3pt 841.9pt;margin:34pt 45pt 50pt 45pt;mso-page-orientation:portrait}
-    div.Section1{page:Section1}
-    body{font-family:Arial,sans-serif;font-size:11pt;line-height:1.3;color:#222;margin:0}
-    .offer-page{width:100%;position:relative;page-break-after:always}
-    .offer-page:last-child{page-break-after:auto}
-    .offer-head img{width:100%;height:auto}
-    .offer-title{text-align:center;font-weight:bold;text-decoration:underline;margin:8pt 0 10pt;font-size:13pt}
-    .row{width:100%;display:table}
-    .row>div{display:table-cell;width:50%;vertical-align:top}
-    h3{font-size:11.5pt;color:#324d7f;margin:6pt 0 2pt}
-    p{font-size:11pt;line-height:1.3;margin:2pt 0}
-    ul{margin:2pt 0 5pt 18pt;padding:0}
-    li{font-size:11pt;line-height:1.3;margin:1pt 0}
-    .watermark{display:none}
-    .progress{display:none}
-    .footer-note{margin-top:12pt}
-    .footer-image img{width:100%;height:auto}
-    .sign-block{margin-top:8pt;page-break-inside:avoid}
-    .manager-approval{page-break-inside:avoid;width:230pt;margin-top:4pt}
-    .manager-approval .stamp,.stamp{width:150pt;height:auto;margin:0 0 3pt}
-    .manager-name{display:block;font-size:12pt;font-weight:bold;margin:0 0 1pt}
-    .manager-title{display:block;font-size:11pt;font-weight:bold;margin:0}
-    .manual-offer-block{border-left:2pt solid #e59b56;padding-left:6pt;margin:4pt 0}
-  
-.dashboard-hero{background:linear-gradient(135deg,#eef3ff 0%,#fff8ef 100%);border:1px solid #dce5f3;border-radius:18px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
-.dashboard-hero h1{margin:0;color:var(--blue);font-size:24px}
-.dashboard-hero p{margin:5px 0 0;color:#667085;font-size:13px}
-.dashboard-chip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #dfe5ef;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:700;color:#4d5b73}
-.dashboard-section-title{font-size:13px;font-weight:800;color:#44516a;margin:6px 0 10px;text-transform:uppercase;letter-spacing:.6px}
-.card-icon{width:38px;height:38px;border-radius:12px;background:#eef3ff;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px}
-.card-sub{font-size:10px;color:#8a94a6;margin-top:6px}
-
-</style>`;
-
-  const htmlDoc=`<!DOCTYPE html>
-  <html xmlns:o="urn:schemas-microsoft-com:office:office"
-        xmlns:w="urn:schemas-microsoft-com:office:word"
-        xmlns="http://www.w3.org/TR/REC-html40">
-  <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">${wordStyles}</head>
-  <body><div class="Section1">${clone.innerHTML}</div></body></html>`;
-
-  const boundary='----=_NextPart_000_0000';
-  let mhtml='MIME-Version: 1.0\r\n';
-  mhtml+='Content-Type: multipart/related; boundary="'+boundary+'"; type="text/html"\r\n\r\n';
-  mhtml+='--'+boundary+'\r\n';
-  mhtml+='Content-Type: text/html; charset="utf-8"\r\n';
-  mhtml+='Content-Transfer-Encoding: quoted-printable\r\n\r\n';
-  mhtml+=htmlDoc.replace(/=/g,'=3D')+'\r\n';
-
-  images.forEach(img=>{
-    mhtml+='--'+boundary+'\r\n';
-    mhtml+='Content-Type: '+img.mime+'\r\n';
-    mhtml+='Content-Transfer-Encoding: base64\r\n';
-    mhtml+='Content-Location: '+img.cid+'\r\n';
-    mhtml+='Content-ID: <'+img.cid+'>\r\n\r\n';
-    mhtml+=img.data.replace(/(.{76})/g,'$1\r\n')+'\r\n';
-  });
-  mhtml+='--'+boundary+'--';
-
-  const blob=new Blob([mhtml],{type:'application/msword'});
+function downloadBlobFile(blob,filename){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
-  a.download='Offer_Letter_'+getCurrentCandidateName()+'.doc';
+  a.download=filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+function downloadOfferPDF(){
+  if(typeof applyExactLetterheadV28==='function') applyExactLetterheadV28();
+  if(typeof normalizeOfferA4PagesV27==='function') normalizeOfferA4PagesV27();
+
+  const clone=buildExactOfferExportClone();
+  if(!clone || !clone.innerHTML.trim()){
+    alert('Please open the offer letter first.');
+    return;
+  }
+
+  const styles=[...document.querySelectorAll('style')]
+    .map(s=>s.outerHTML)
+    .join('\n');
+
+  const printWin=window.open('','_blank','width=1100,height=850');
+  if(!printWin){
+    alert('Please allow pop-ups. The PDF window could not be opened.');
+    return;
+  }
+
+  const extra=`
+  <style>
+    @page{size:A4;margin:0}
+    html,body{margin:0!important;padding:0!important;background:#fff!important}
+    body{font-family:Arial,sans-serif}
+    #offerPrint{margin:0!important;padding:0!important;background:#fff!important}
+    .offer-page{
+      width:210mm!important;
+      min-height:297mm!important;
+      page-break-after:always!important;
+      break-after:page!important;
+      box-shadow:none!important;
+      margin:0!important;
+    }
+    .offer-page:last-child{page-break-after:auto!important;break-after:auto!important}
+    .no-print,.word-ribbon,.word-status,#offerEditorToolbar,
+    .signature-toolbar-v37,.manager-offer-toolbar-v39,
+    #sendBackModal,#signatureSettingsModal,.modal,.modal-head,
+    button,input,select,textarea,[data-user-management]{display:none!important}
+  </style>`;
+
+  printWin.document.open();
+  printWin.document.write(
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${currentOfferFileName('pdf').replace('.pdf','')}</title>${styles}${extra}</head><body>${clone.outerHTML}</body></html>`
+  );
+  printWin.document.close();
+
+  printWin.onload=()=>{
+    setTimeout(()=>{
+      printWin.focus();
+      printWin.print();
+    },500);
+  };
+}
+
+function downloadOfferWord(){
+  if(typeof applyExactLetterheadV28==='function') applyExactLetterheadV28();
+  if(typeof normalizeOfferA4PagesV27==='function') normalizeOfferA4PagesV27();
+
+  const clone=buildExactOfferExportClone();
+  if(!clone || !clone.innerHTML.trim()){
+    alert('Please open the offer letter first.');
+    return;
+  }
+
+  const styles=[...document.querySelectorAll('style')]
+    .map(s=>s.textContent)
+    .join('\n');
+
+  const wordCss=`
+    @page Section1{size:595.3pt 841.9pt;margin:0pt;}
+    div.Section1{page:Section1;}
+    body{font-family:Arial,sans-serif;margin:0;padding:0;background:#fff}
+    .offer-page{
+      width:210mm;
+      min-height:297mm;
+      margin:0;
+      page-break-after:always;
+      break-after:page;
+      position:relative;
+      box-sizing:border-box;
+      background:#fff;
+    }
+    .offer-page:last-child{page-break-after:auto}
+    .no-print,.word-ribbon,.word-status,#offerEditorToolbar,
+    .signature-toolbar-v37,.manager-offer-toolbar-v39,
+    #sendBackModal,#signatureSettingsModal,.modal,.modal-head,
+    button,input,select,textarea,[data-user-management]{display:none!important}
+  `;
+
+  const docHtml=`<!DOCTYPE html>
+  <html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:w="urn:schemas-microsoft-com:office:word"
+        xmlns="http://www.w3.org/TR/REC-html40">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="ProgId" content="Word.Document">
+    <meta name="Generator" content="PSN HR Portal">
+    <meta name="Originator" content="PSN HR Portal">
+    <!--[if gte mso 9]>
+    <xml>
+      <w:WordDocument>
+        <w:View>Print</w:View>
+        <w:Zoom>100</w:Zoom>
+        <w:DoNotOptimizeForBrowser/>
+      </w:WordDocument>
+    </xml>
+    <![endif]-->
+    <style>${styles}\n${wordCss}</style>
+  </head>
+  <body><div class="Section1">${clone.outerHTML}</div></body></html>`;
+
+  const blob=new Blob(['\ufeff',docHtml],{
+    type:'application/msword;charset=utf-8'
+  });
+  downloadBlobFile(blob,currentOfferFileName('doc'));
 }
 
 function closeOffer(){
